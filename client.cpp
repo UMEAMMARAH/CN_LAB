@@ -7,11 +7,10 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#define SERVER_IP "127.0.0.1"      // Change if needed
-#define HEARTBEAT_PORT 6000        // Send heartbeat to server
-#define BROADCAST_PORT 6001        // Receive server broadcasts
+#define SERVER_IP "127.0.0.1"      // Server IP (change if needed)
+#define HEARTBEAT_PORT 6000        // UDP heartbeat port
+#define BROADCAST_PORT 6001        // UDP broadcast port
 #define TCP_PORT 5000              // TCP server port
-
 #define BUFFER_SIZE 1024
 
 std::string campusName;
@@ -28,7 +27,7 @@ void sendHeartbeat() {
 
     sockaddr_in serverAddr{};
     serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(HEARTBEAT_PORT);    // Correct port
+    serverAddr.sin_port = htons(HEARTBEAT_PORT);
     inet_pton(AF_INET, SERVER_IP, &serverAddr.sin_addr);
 
     while (true) {
@@ -36,7 +35,7 @@ void sendHeartbeat() {
         sendto(udpSock, heartbeat.c_str(), heartbeat.size(), 0,
                (sockaddr*)&serverAddr, sizeof(serverAddr));
 
-        std::this_thread::sleep_for(std::chrono::seconds(10));
+        std::this_thread::sleep_for(std::chrono::seconds(10)); // every 10 sec
     }
 }
 
@@ -50,7 +49,7 @@ void listenBroadcasts() {
 
     sockaddr_in addr{};
     addr.sin_family = AF_INET;
-    addr.sin_port = htons(BROADCAST_PORT);   // Bind to broadcast port
+    addr.sin_port = htons(BROADCAST_PORT);
     addr.sin_addr.s_addr = INADDR_ANY;
 
     if (bind(udpSock, (sockaddr*)&addr, sizeof(addr)) < 0) {
@@ -63,7 +62,6 @@ void listenBroadcasts() {
 
     while (true) {
         memset(buffer, 0, BUFFER_SIZE);
-
         int n = recvfrom(udpSock, buffer, BUFFER_SIZE, 0, nullptr, nullptr);
         if (n > 0) {
             std::cout << "\n[BROADCAST] " << buffer << "\n> ";
@@ -77,8 +75,8 @@ void listenTCP(int tcpSock) {
 
     while (true) {
         memset(buffer, 0, BUFFER_SIZE);
-
         int n = recv(tcpSock, buffer, BUFFER_SIZE, 0);
+
         if (n <= 0) {
             std::cout << "\n[INFO] Disconnected from server.\n";
             close(tcpSock);
@@ -91,6 +89,7 @@ void listenTCP(int tcpSock) {
 
 // ===================== MAIN =====================
 int main() {
+    // -------- USER INPUT --------
     std::cout << "Enter Campus Name: ";
     std::getline(std::cin, campusName);
     std::cout << "Enter Password: ";
@@ -98,7 +97,7 @@ int main() {
     std::cout << "Enter Department: ";
     std::getline(std::cin, department);
 
-    // -------- CONNECT TCP --------
+    // -------- TCP CONNECTION --------
     int tcpSock = socket(AF_INET, SOCK_STREAM, 0);
     if (tcpSock < 0) {
         std::cerr << "[ERROR] Failed to create TCP socket.\n";
@@ -159,7 +158,6 @@ int main() {
             std::getline(std::cin, message);
 
             std::string msg = targetCampus + "|" + targetDept + "|" + message;
-
             send(tcpSock, msg.c_str(), msg.size(), 0);
         }
         else if (choice == 2) {
