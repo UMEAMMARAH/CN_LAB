@@ -19,3 +19,12 @@ g++ server.cpp -o server -pthread
 2. Client
 g++ client.cpp -o client -pthread
 ./client
+
+- Enter Campus Name, Password, and Department when prompted.
+- Use the menu to send messages to other campuses.
+
+Features:
+- Multi-client TCP connections with authentication.
+- UDP heartbeat for campus online status.
+- Admin broadcast messages to all campuses.
+- Console-based interface with message routing.
