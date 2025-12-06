@@ -6,8 +6,6 @@
 #include <mutex>
 #include <chrono>
 #include <ctime>
-#include <sstream>
-#include <algorithm>
 #include <cstring>
 #include <arpa/inet.h>
 #include <sys/socket.h>
@@ -35,7 +33,7 @@ std::map<std::string, int> campusSockets;
 // Last UDP heartbeat timestamp
 std::map<std::string, std::time_t> campusLastSeen;
 
-// Timestamp helper
+// Helper: Get current timestamp as string
 std::string currentTime() {
     auto now = std::chrono::system_clock::now();
     std::time_t now_time = std::chrono::system_clock::to_time_t(now);
@@ -47,7 +45,7 @@ void handleClient(int clientSocket) {
     char buffer[BUFFER_SIZE];
     std::string campusName;
 
-    // 1. AUTHENTICATION
+    // ----------------- Authentication -----------------
     memset(buffer, 0, BUFFER_SIZE);
     int bytesReceived = recv(clientSocket, buffer, BUFFER_SIZE, 0);
     if (bytesReceived <= 0) {
@@ -68,14 +66,13 @@ void handleClient(int clientSocket) {
     campusName = credentials.substr(cPos + 7, pPos - (cPos + 7));
     std::string password = credentials.substr(pPos + 6);
 
-    // Validate
+    // Validate credentials
     {
         std::lock_guard<std::mutex> lock(mtx);
         if (campusCreds.count(campusName) && campusCreds[campusName] == password) {
             campusSockets[campusName] = clientSocket;
             send(clientSocket, "AUTH_SUCCESS", 12, 0);
-            std::cout << "[INFO] " << campusName << " connected at "
-                      << currentTime();
+            std::cout << "[INFO] " << campusName << " connected at " << currentTime();
         } else {
             send(clientSocket, "AUTH_FAIL", 9, 0);
             close(clientSocket);
@@ -83,15 +80,14 @@ void handleClient(int clientSocket) {
         }
     }
 
-    // 2. MESSAGE ROUTING LOOP
+    // ----------------- Message Routing Loop -----------------
     while (true) {
         memset(buffer, 0, BUFFER_SIZE);
         int n = recv(clientSocket, buffer, BUFFER_SIZE, 0);
 
-        if (n <= 0) {
+        if (n <= 0) { // Client disconnected
             std::lock_guard<std::mutex> lock(mtx);
-            std::cout << "[INFO] " << campusName << " disconnected at " 
-                      << currentTime();
+            std::cout << "[INFO] " << campusName << " disconnected at " << currentTime();
             campusSockets.erase(campusName);
             close(clientSocket);
             break;
@@ -110,7 +106,7 @@ void handleClient(int clientSocket) {
         std::string targetDept   = msg.substr(sep1 + 1, sep2 - sep1 - 1);
         std::string message      = msg.substr(sep2 + 1);
 
-        // Forward message
+        // Forward message to target campus if connected
         {
             std::lock_guard<std::mutex> lock(mtx);
             if (campusSockets.count(targetCampus)) {
@@ -118,8 +114,7 @@ void handleClient(int clientSocket) {
                 std::cout << "[ROUTED] " << campusName << " -> " << targetCampus
                           << " | DEPT: " << targetDept << " | MSG: " << message << "\n";
             } else {
-                std::cout << "[WARN] Target campus " << targetCampus
-                          << " not connected.\n";
+                std::cout << "[WARN] Target campus " << targetCampus << " not connected.\n";
             }
         }
     }
@@ -157,7 +152,6 @@ void udpListener() {
         if (n > 0) {
             std::string heartbeat(buffer);
             size_t sep = heartbeat.find("|");
-
             if (sep != std::string::npos) {
                 std::string campus = heartbeat.substr(0, sep);
                 std::lock_guard<std::mutex> lock(mtx);
@@ -170,7 +164,6 @@ void udpListener() {
 // ===================== ADMIN CONSOLE =====================
 void adminConsole() {
     int udpSock = socket(AF_INET, SOCK_DGRAM, 0);
-
     if (udpSock < 0) {
         std::cerr << "[ERROR] Failed to create admin broadcast socket.\n";
         return;
@@ -191,7 +184,7 @@ void adminConsole() {
         std::string input;
         std::getline(std::cin, input);
 
-        if (input == "status") {
+        if (input == "status") { // Show last heartbeat of campuses
             std::lock_guard<std::mutex> lock(mtx);
             std::cout << "\n====== CAMPUS STATUS ======\n";
             for (auto& c : campusLastSeen) {
@@ -201,9 +194,9 @@ void adminConsole() {
             continue;
         }
 
+        // Send broadcast to all clients
         sendto(udpSock, input.c_str(), input.size(), 0,
                (sockaddr*)&bAddr, sizeof(bAddr));
-
         std::cout << "[ADMIN] Broadcast sent.\n";
     }
 }
@@ -218,7 +211,7 @@ int main() {
     std::thread adminThread(adminConsole);
     adminThread.detach();
 
-    // Create TCP server
+    // Create TCP server socket
     int tcpSock = socket(AF_INET, SOCK_STREAM, 0);
     if (tcpSock < 0) {
         std::cerr << "[ERROR] TCP socket creation failed.\n";
@@ -238,10 +231,10 @@ int main() {
     listen(tcpSock, 5);
     std::cout << "[INFO] CENTRAL SERVER ONLINE. Waiting for connections...\n";
 
+    // Accept clients in loop
     while (true) {
         sockaddr_in clientAddr{};
         socklen_t addrLen = sizeof(clientAddr);
-
         int clientSocket = accept(tcpSock, (sockaddr*)&clientAddr, &addrLen);
         if (clientSocket >= 0) {
             std::thread clientThread(handleClient, clientSocket);
