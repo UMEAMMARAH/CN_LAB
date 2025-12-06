@@ -28,3 +28,13 @@ Features:
 - UDP heartbeat for campus online status.
 - Admin broadcast messages to all campuses.
 - Console-based interface with message routing.
+
+Message Format:
+TCP Messages: TargetCampus|TargetDept|Message
+UDP Heartbeat: CampusName|ONLINE
+
+Author:
+F23-3034 Ume Ammarah
+
+
+
